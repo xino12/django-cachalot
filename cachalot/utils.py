@@ -61,6 +61,11 @@ def check_parameter_types(params):
                 raise UncachableQuery
 
 
+def replace_at_index1(tup, ix, val):
+  lst = list(tup)
+  lst[ix] = val
+  return tuple(lst)
+
 def get_query_cache_key(compiler):
     """
     Generates a cache key from a SQLCompiler.
@@ -76,6 +81,9 @@ def get_query_cache_key(compiler):
     """
     sql, params = compiler.as_sql()
     check_parameter_types(params)
+    for p in params:
+        if isinstance(p, (unicode)):
+            params = replace_at_index1(params, params.index(p), str(p))
     cache_key = '%s:%s:%s' % (compiler.using, sql, params)
     return sha1(cache_key.encode('utf-8')).hexdigest()
 
