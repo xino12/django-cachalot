@@ -83,7 +83,7 @@ def get_query_cache_key(compiler):
     check_parameter_types(params)
     for p in params:
         if isinstance(p, (unicode)):
-            params = replace_at_index1(params, params.index(p), str(p))
+            params = replace_at_index1(params, params.index(p), str(p.encode('utf-8')))
     cache_key = '%s:%s:%s' % (compiler.using, sql, params)
     return sha1(cache_key.encode('utf-8')).hexdigest()
 
