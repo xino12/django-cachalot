@@ -19,7 +19,7 @@ Requirements
 
   - PostgreSQL
   - SQLite
-  - MySQL (but you probably don’t need django-cachalot in this case,
+  - MySQL (but on older versions like 5.5, django-cachalot has no effect,
     see :ref:`MySQL limits <MySQL>`)
 
 Usage
@@ -32,7 +32,7 @@ Usage
 #. If you modify data outside Django
    – typically after restoring a SQL database –, run
    ``./manage.py invalidate_cachalot``
-#. Be aware of :ref:`the few other limits <limits>`
+#. Be aware of :ref:`the few other limits <Limits>`
 #. If you use
    `django-debug-toolbar <https://github.com/django-debug-toolbar/django-debug-toolbar>`_,
    you can add ``'cachalot.panels.CachalotPanel',``
@@ -61,6 +61,23 @@ Settings
 .. |CACHES| replace:: ``CACHES``
 .. _CACHES: https://docs.djangoproject.com/en/1.7/ref/settings/#std:setting-CACHES
 
+``CACHALOT_TIMEOUT``
+~~~~~~~~~~~~~~~~~~~~
+
+:Default: ``None``
+:Description:
+  Number of seconds during which the cache should consider data as valid.
+  ``None`` means an infinite timeout.
+
+  .. warning::
+     Cache timeouts don’t work in a strict way on most cache backends.
+     A cache might not keep data during the requested timeout:
+     it can keep it in memory during a shorter time than the specified timeout.
+     It can even keep it longer, even if data is not returned when you request it.
+     So **don’t rely on timeouts to limit the size of your database**,
+     you might face some unexpected behaviour.
+     Always set the maximum cache size instead.
+
 ``CACHALOT_CACHE_RANDOM``
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -86,10 +103,11 @@ Settings
   Sequence of SQL table names that will be the only ones django-cachalot
   will cache. Only queries with a subset of these tables will be cached.
   The sequence being empty (as it is by default) doesn’t mean that no table
-  can be cached: it disables this setting, so any table can be cache.
+  can be cached: it disables this setting, so any table can be cached.
   :ref:`CACHALOT_UNCACHABLE_TABLES` has more weight than this:
   if you add a table to both settings, it will never be cached.
   Use a frozenset over other sequence types for a tiny performance boost.
+  Run ``./manage.py invalidate_cachalot`` after changing this setting.
 
 
 .. _CACHALOT_UNCACHABLE_TABLES:
@@ -104,20 +122,25 @@ Settings
   Always keep ``'django_migrations'`` in it, otherwise you may face
   some issues, especially during tests.
   Use a frozenset over other sequence types for a tiny performance boost.
+  Run ``./manage.py invalidate_cachalot`` after changing this setting.
 
 ``CACHALOT_QUERY_KEYGEN``
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :Default: ``'cachalot.utils.get_query_cache_key'``
 :Description: Python module path to the function that will be used to generate
-              the cache key of a SQL query
+              the cache key of a SQL query.
+              Run ``./manage.py invalidate_cachalot``
+              after changing this setting.
 
 ``CACHALOT_TABLE_KEYGEN``
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :Default: ``'cachalot.utils.get_table_cache_key'``
 :Description: Python module path to the function that will be used to generate
-              the cache key of a SQL table
+              the cache key of a SQL table.
+              Clear your cache after changing this setting (it’s not enough
+              to use ``./manage.py invalidate_cachalot``).
 
 .. _Dynamic overriding:
 
@@ -143,10 +166,10 @@ For example:
     settings.CACHALOT_ENABLED = False
 
 
-.. _Template tag:
+.. _Template utils:
 
-Template tag
-............
+Template utils
+..............
 
 `Caching template fragments <https://docs.djangoproject.com/en/1.8/topics/cache/#template-fragment-caching>`_
 can be extremely powerful to speedup a Django application.  However, it often
@@ -166,6 +189,9 @@ or tables.  The API function
 :meth:`get_last_invalidation <cachalot.api.get_last_invalidation>` does that,
 and we provided a ``get_last_invalidation`` template tag to directly
 use it in templates.  It works exactly the same as the API function.
+
+Django template tag
+~~~~~~~~~~~~~~~~~~~
 
 Example of a quite heavy nested loop with a lot of SQL queries
 (considering no prefetch has been done)::
@@ -190,6 +216,45 @@ Example of a quite heavy nested loop with a lot of SQL queries
 ``cache_alias`` and ``db_alias`` keywords arguments of this template tag
 are also available (see
 :meth:`cachalot.api.get_last_invalidation`).
+
+
+Jinja2 statement and function
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A Jinja2 extension for django-cachalot can be used, simply add
+``''cachalot.jinja2ext.cachalot','`` to the ``'extensions'`` list of the ``OPTIONS``
+dict in the Django ``TEMPLATES`` settings.
+
+It provides:
+
+- The API function
+  :meth:`get_last_invalidation <cachalot.api.get_last_invalidation>` directly
+  available as a function anywhere in Jinja2.
+- An Jinja2 statement equivalent to the ``cache`` template tag of Django.
+
+The ``cache`` does the same thing as its Django template equivalent,
+except that ``cache_key`` and ``timeout`` are optional keyword arguments, and
+you need to add commas between arguments. When unspecified, ``cache_key`` is
+generated from the template filename plus the statement line number, and
+``timeout`` defaults to infinite.  To specify which cache should store the
+saved content, use the ``cache_alias`` keyword argument.
+
+Same example than above, but for Jinja2::
+
+    {% cache get_last_invalidation('auth.User', 'library.Book', 'library.Author'),
+             cache_key='short_user_profile', timeout=3600 %}
+      {{ user }} has borrowed these books:
+      {% for book in user.borrowed_books.all() %}
+        <div class="book">
+          {{ book }} ({{ book.pages.count() }} pages)
+          <span class="authors">
+            {% for author in book.authors.all() %}
+              {{ author }}{% if not loop.last %},{% endif %}
+            {% endfor %}
+          </span>
+        </div>
+      {% endfor %}
+    {% endcache %}
 
 
 .. _Signal:

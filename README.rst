@@ -23,4 +23,10 @@ Caches your Django ORM queries and automatically invalidates them.
 Documentation
 -------------
 
-Available `on Read The Docs <http://django-cachalot.readthedocs.org>`_.
+Available `on Read The Docs <http://django-cachalot.readthedocs.io>`_.
+
+
+Discussion
+----------
+
+Via `our Slack team <https://django-cachalot.slack.com>`_.
