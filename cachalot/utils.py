@@ -79,8 +79,6 @@ def get_query_cache_key(compiler):
     :return: A cache key
     :rtype: int
     """
-    if compiler.query.select_for_update:
-        raise UncachableQuery
     sql, params = compiler.as_sql()
     check_parameter_types(params)
     for p in params:
